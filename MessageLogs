@@ -1,0 +1,45 @@
+import discord
+from redbot.core import commands, Config
+from redbot.core.bot import Red
+
+class MessageLogger(commands.Cog):
+    def __init__(self, bot: Red):
+        self.bot = bot
+        self.config = Config.get_conf(self, identifier=1234567890)
+        default_guild = {"log_channel": None}
+        self.config.register_guild(**default_guild)
+
+    @commands.group()
+    async def msglogset(self, ctx):
+        """Configuration des logs de messages supprimés"""
+        pass
+
+    @msglogset.command()
+    async def setchannel(self, ctx, channel: discord.TextChannel):
+        """Définit le canal où les messages supprimés seront enregistrés"""
+        await self.config.guild(ctx.guild).log_channel.set(channel.id)
+        await ctx.send(f"Canal de log des messages supprimés défini sur {channel.mention}")
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message: discord.Message):
+        if message.guild is None:
+            return  # Ignore les messages supprimés en DM
+        
+        log_channel_id = await self.config.guild(message.guild).log_channel()
+        if log_channel_id is None:
+            return  # Aucun canal de log défini
+        
+        log_channel = message.guild.get_channel(log_channel_id)
+        if log_channel is None:
+            return  # Le canal de log n'existe plus
+        
+        # Envoi du message de log
+        embed = discord.Embed(title="Message Supprimé", color=discord.Color.red())
+        embed.add_field(name="Utilisateur", value=message.author.mention, inline=False)
+        embed.add_field(name="Channel", value=message.channel.mention, inline=False)
+        embed.add_field(name="Contenu", value=message.content or "*Aucun contenu*", inline=False)
+        embed.set_footer(text=f"ID: {message.id}")
+        await log_channel.send(embed=embed)
+
+def setup(bot):
+    bot.add_cog(MessageLogger(bot))
